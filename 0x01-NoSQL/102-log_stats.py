@@ -1,43 +1,46 @@
 #!/usr/bin/env python3
-"""
-Improve 12-log_stats.py by adding the top 10 of the most
-present IPs in the collection nginx of the database logs:
-"""
-
+""" MongoDB Operations with Python using pymongo """
 from pymongo import MongoClient
 
-
 if __name__ == "__main__":
-    client = MongoClient("mongodb://localhost:27017/")
-    database = client["logs"]
-    collection = database["nginx"]
+    """ Provides some stats about Nginx logs stored in MongoDB """
+    client = MongoClient('mongodb://127.0.0.1:27017')
+    nginx_collection = client.logs.nginx
 
-    total_logs = collection.count_documents({})
+    n_logs = nginx_collection.count_documents({})
+    print(f'{n_logs} logs')
 
     methods = ["GET", "POST", "PUT", "PATCH", "DELETE"]
-    method_counts = {method: collection.count_documents(
-        {"method": method}) for method in methods}
+    print('Methods:')
+    for method in methods:
+        count = nginx_collection.count_documents({"method": method})
+        print(f'\tmethod {method}: {count}')
 
-    status_logs = collection.count_documents({"method": "GET", "path": "/status"})
+    status_check = nginx_collection.count_documents(
+        {"method": "GET", "path": "/status"}
+    )
 
-    ip_counts = collection.aggregate([
-        {"$group": {"_id": "$ip", "count": {"$sum": 1}}},
+    print(f'{status_check} status check')
+
+    top_ips = nginx_collection.aggregate([
+        {"$group":
+            {
+                "_id": "$ip",
+                "count": {"$sum": 1}
+            }
+         },
         {"$sort": {"count": -1}},
-        {"$limit": 10}
+        {"$limit": 10},
+        {"$project": {
+            "_id": 0,
+            "ip": "$_id",
+            "count": 1
+        }}
     ])
 
-    print(f"{total_logs} logs where {total_logs} is the number of \
-        documents in this collection")
-
-    print("Methods:")
-
-    for method in methods:
-        print(f"\tmethod {method}: {method_counts[method]}")
-
-    print(f"method=GET\npath=/status: {status_logs}")
-
     print("IPs:")
-
-    for ip in ip_counts:
-        print(f"\t{ip['_id']}: {ip['count']}")
+    for top_ip in top_ips:
+        ip = top_ip.get("ip")
+        count = top_ip.get("count")
+        print(f'\t{ip}: {count}')
 
